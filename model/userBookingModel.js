@@ -7,7 +7,7 @@ const userBookingSchema = new mongoose.Schema({
   gender: { type: String, required: true, enum: ["male", "female", "other"] },
   region: { type: String, required: true, enum: ["India", "Asia", "Europe, Australia", "USA, Canada", "South America, Africa"] },
   healthIssue: { type: String, required: true },
-  verified: { type: Boolean, default: false },
+  verified: { type: Boolean, default: true },
   consultantId: { type: String, unique: true, sparse: true },
   consultationData: {
     hairHealth: {
@@ -27,8 +27,12 @@ const userBookingSchema = new mongoose.Schema({
     scalpAssessment: {
       scalpPhoto: String
     }
-  }
-  ,
+  },
+  amount: { type: Number },
+  orderId: { type: String },
+  paymentStatus: { type: String, default: 'pending' },
+  paymentMethod: { type: String },
+  paymentId: { type: String },
   createdAt: {
     type: Date,
     default: Date.now

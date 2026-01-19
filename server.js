@@ -7,7 +7,10 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import connectDB from "./config/db.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
-
+// Routes
+import consultationRoutes from "./routes/consultationRoutes.js";
+import appointmentRoutes from "./routes/appointmentRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 dotenv.config();
 
@@ -47,13 +50,12 @@ app.get("/", (req, res) => {
   res.json({ success: true, message: "API Running 🚀" });
 });
 
-// Routes
-import consultationRoutes from "./routes/consultationRoutes.js";
-import appointmentRoutes from "./routes/appointmentRoutes.js";
+
 app.use("/api/bookingconsultancy", consultationRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/payments", paymentRoutes);
 
-// 404 Route
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
