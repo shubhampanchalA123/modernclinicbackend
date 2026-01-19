@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import connectDB from "./config/db.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+
 // Routes
 import consultationRoutes from "./routes/consultationRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
@@ -19,13 +20,41 @@ connectDB();
 
 const app = express();
 
-// Middlewares
-app.use(cors());
+/* =======================
+   CORS CONFIG (ADDED)
+======================= */
+const allowedOrigins = [
+  "https://www.moderndoctor.in",
+  "https://moderndoctor.in",
+  "moderndoctor.in"
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow server-to-server / Postman
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+/* ======================= */
+
+// Body parsers
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files
-app.use(express.static('public'));
+app.use(express.static("public"));
 
 app.use(
   helmet({
@@ -50,12 +79,12 @@ app.get("/", (req, res) => {
   res.json({ success: true, message: "API Running 🚀" });
 });
 
-
+// API Routes
 app.use("/api/bookingconsultancy", consultationRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/payments", paymentRoutes);
 
-
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -66,19 +95,8 @@ app.use((req, res) => {
 // Error Handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5006;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Accessible at: http://localhost:${PORT}`);
-  console.log(`Network access: http://192.168.29.137:${PORT}`);
-}).on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.log(`Port ${PORT} is busy, trying ${PORT + 1}...`);
-    app.listen(PORT + 1, '0.0.0.0', () => {
-      console.log(`Server running on port ${PORT + 1}`);
-      console.log(`Accessible at: http://localhost:${PORT + 1}`);
-      console.log(`Network access: http://192.168.29.137:${PORT + 1}`);
-    });
-  }
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on port ${PORT}`);
 });
