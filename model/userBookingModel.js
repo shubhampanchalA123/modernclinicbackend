@@ -9,6 +9,15 @@ const userBookingSchema = new mongoose.Schema({
   healthIssue: { type: String, required: true },
   verified: { type: Boolean, default: true },
   consultantId: { type: String, unique: true, sparse: true },
+  plans: [{
+    planId: { type: String, required: true },
+    title: { type: String },
+    type: { type: String },
+    durationTime: { type: String },
+    amount: { type: Number },
+    startDate: { type: Date },
+    expiryDate: { type: Date }
+  }],
   consultationData: {
     hairHealth: {
       stage: String,
@@ -33,6 +42,8 @@ const userBookingSchema = new mongoose.Schema({
   paymentStatus: { type: String, default: 'pending' },
   paymentMethod: { type: String },
   paymentId: { type: String },
+  planStartDate: { type: Date },
+  planExpiryDate: { type: Date },
   createdAt: {
     type: Date,
     default: Date.now

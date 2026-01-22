@@ -2,6 +2,32 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import UserBooking from '../model/userBookingModel.js';
 import Appointment from '../model/appointmentModel.js';
+import { getPlanAmount } from './planController.js';
+import Plan from "../model/Plan.js";
+
+// Utility function to calculate plan expiry date
+const calculatePlanExpiry = (startDate, durationTime) => {
+  const date = new Date(startDate);
+  switch (durationTime) {
+    case 'ONE_TIME':
+      return null; // No expiry for one-time
+    case '1_MONTH':
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case '3_MONTH':
+      date.setMonth(date.getMonth() + 3);
+      break;
+    case '6_MONTH':
+      date.setMonth(date.getMonth() + 6);
+      break;
+    case '12_MONTH':
+      date.setMonth(date.getMonth() + 12);
+      break;
+    default:
+      return null;
+  }
+  return date;
+};
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -9,63 +35,118 @@ const razorpay = new Razorpay({
 });
 
 // Create Payment Order
-export const createPaymentOrder = async (req, res) => {
+const createPaymentOrder = async (req, res) => {
   try {
-    console.log('Create Payment Order - Request Body:', req.body);
-    const { consultantId, amount } = req.body;
+    const { consultantId, selectedPlans, userType } = req.body;
 
-    if (!consultantId || !amount) {
-      console.log('Validation failed: Missing consultantId or amount');
-      return res.status(400).json({ success: false, message: 'Consultant ID and amount are required' });
+    // 1️⃣ Basic validation
+    if (
+      !consultantId ||
+      !selectedPlans ||
+      !Array.isArray(selectedPlans) ||
+      selectedPlans.length === 0 ||
+      !userType
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "consultantId, selectedPlans (array) and userType are required",
+      });
     }
 
-    console.log('Finding booking for consultantId:', consultantId);
+    // 2️⃣ Validate userType
+    if (!["india", "foreign"].includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userType. Allowed: india | foreign",
+      });
+    }
+
+    // 3️⃣ Find booking
     const booking = await UserBooking.findOne({ consultantId });
-    console.log('Booking found:', booking ? 'Yes' : 'No');
     if (!booking) {
-      console.log('Booking not found for consultantId:', consultantId);
-      return res.status(404).json({ success: false, message: 'Booking not found' });
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
     }
 
+    // 4️⃣ Calculate total amount securely
+    let totalAmount = 0;
+    const plansData = [];
 
-    // Update booking with amount
-    booking.amount = amount;
-    console.log('Saving booking with amount:', amount);
+    for (const selected of selectedPlans) {
+      const plan = await Plan.findById(selected.planId);
+
+      if (!plan) {
+        return res.status(404).json({
+          success: false,
+          message: `Plan not found: ${selected.planId}`,
+        });
+      }
+
+      let planAmount;
+
+      if (userType === "india") {
+        planAmount = plan.prices.india;
+      } else {
+        if (!plan.prices.foreign) {
+          return res.status(400).json({
+            success: false,
+            message: `Foreign price not available for plan: ${plan.title}`,
+          });
+        }
+        planAmount = plan.prices.foreign;
+      }
+
+      totalAmount += planAmount;
+
+      plansData.push({
+        planId: plan._id,
+        title: plan.title,
+        type: plan.type,
+        durationTime: plan.durationTime || null,
+        amount: planAmount,
+      });
+    }
+
+    // 5️⃣ Save booking data
+    booking.plans = plansData;
+    booking.userType = userType;
+    booking.amount = totalAmount;
     await booking.save();
-    console.log('Booking saved successfully');
 
-    const options = {
-      amount: amount * 100, // Razorpay expects amount in paisa
-      currency: 'INR',
-      receipt: consultantId,
-    };
-    console.log('Razorpay options:', options);
+    // 6️⃣ Create Razorpay order ✅ FIXED
+    const order = await razorpay.orders.create({
+      amount: totalAmount * 100, // ✅ FIX HERE
+      currency: userType === "india" ? "INR" : "USD",
+      receipt: booking._id.toString(),
+    });
 
-    console.log('Creating Razorpay order...');
-    const order = await razorpay.orders.create(options);
-    console.log('Razorpay order created:', order.id);
-
-    // Update booking with orderId
+    // 7️⃣ Save orderId
     booking.orderId = order.id;
-    console.log('Saving booking with orderId:', order.id);
     await booking.save();
-    console.log('Final booking saved');
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
       key: process.env.RAZORPAY_KEY_ID,
     });
+
   } catch (error) {
-    console.log('Error in createPaymentOrder:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Payment Order Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
+
+
 // Verify Payment
-export const verifyPayment = async (req, res) => {
+const verifyPayment = async (req, res) => {
   try {
     const { consultantId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
 
@@ -92,6 +173,17 @@ export const verifyPayment = async (req, res) => {
     booking.paymentStatus = 'completed';
     booking.paymentMethod = 'online';
     booking.paymentId = razorpay_payment_id;
+
+    // Set plan start and expiry dates for each plan
+    const startDate = new Date();
+    for (const planItem of booking.plans) {
+      const plan = await Plan.findById(planItem.planId);
+      if (plan) {
+        planItem.startDate = startDate;
+        planItem.expiryDate = calculatePlanExpiry(startDate, plan.durationTime);
+      }
+    }
+
     await booking.save();
 
     res.status(200).json({ success: true, message: 'Payment verified successfully' });
@@ -101,7 +193,7 @@ export const verifyPayment = async (req, res) => {
 };
 
 // Update Payment Method (for at_clinic or emi)
-export const updatePaymentMethod = async (req, res) => {
+const updatePaymentMethod = async (req, res) => {
   try {
     const { consultantId, paymentMethod } = req.body;
 
@@ -125,63 +217,116 @@ export const updatePaymentMethod = async (req, res) => {
 };
 
 // Create Appointment Payment Order
-export const createAppointmentPaymentOrder = async (req, res) => {
+const createAppointmentPaymentOrder = async (req, res) => {
   try {
-    console.log('Create Appointment Payment Order - Request Body:', req.body);
-    const { appointmentId, amount } = req.body;
+    const { appointmentId, selectedPlans, userType } = req.body;
 
-    if (!appointmentId || !amount) {
-      console.log('Validation failed: Missing appointmentId or amount');
-      return res.status(400).json({ success: false, message: 'Appointment ID and amount are required' });
+    // 1️⃣ Basic validation
+    if (
+      !appointmentId ||
+      !selectedPlans ||
+      !Array.isArray(selectedPlans) ||
+      selectedPlans.length === 0 ||
+      !userType
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "appointmentId, selectedPlans (array) and userType are required",
+      });
     }
 
-    console.log('Finding appointment for appointmentId:', appointmentId);
+    // 2️⃣ Validate userType
+    if (!["india", "foreign"].includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userType. Allowed: india | foreign",
+      });
+    }
+
+    // 3️⃣ Find appointment
     const appointment = await Appointment.findOne({ appointmentId });
-    console.log('Appointment found:', appointment ? 'Yes' : 'No');
     if (!appointment) {
-      console.log('Appointment not found for appointmentId:', appointmentId);
-      return res.status(404).json({ success: false, message: 'Appointment not found' });
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
     }
 
+    // 4️⃣ Calculate total amount securely
+    let totalAmount = 0;
+    const plansData = [];
 
-    // Update appointment with amount
-    appointment.amount = amount;
-    console.log('Saving appointment with amount:', amount);
+    for (const selected of selectedPlans) {
+      const plan = await Plan.findById(selected.planId);
+
+      if (!plan) {
+        return res.status(404).json({
+          success: false,
+          message: `Plan not found: ${selected.planId}`,
+        });
+      }
+
+      let planAmount;
+
+      if (userType === "india") {
+        planAmount = plan.prices.india;
+      } else {
+        if (!plan.prices.foreign) {
+          return res.status(400).json({
+            success: false,
+            message: `Foreign price not available for plan: ${plan.title}`,
+          });
+        }
+        planAmount = plan.prices.foreign;
+      }
+
+      totalAmount += planAmount;
+
+      plansData.push({
+        planId: plan._id,
+        title: plan.title,
+        type: plan.type,
+        durationTime: plan.durationTime || null,
+        amount: planAmount,
+      });
+    }
+
+    // 5️⃣ Save appointment data
+    appointment.plans = plansData;
+    appointment.userType = userType;
+    appointment.amount = totalAmount;
     await appointment.save();
-    console.log('Appointment saved successfully');
 
-    const options = {
-      amount: amount * 100, // Razorpay expects amount in paisa
-      currency: 'INR',
+    // 6️⃣ Create Razorpay order
+    const order = await razorpay.orders.create({
+      amount: totalAmount * 100, // amount in paisa/cents
+      currency: userType === "india" ? "INR" : "USD",
       receipt: appointmentId,
-    };
-    console.log('Razorpay options:', options);
+    });
 
-    console.log('Creating Razorpay order...');
-    const order = await razorpay.orders.create(options);
-    console.log('Razorpay order created:', order.id);
-
-    // Update appointment with orderId
+    // 7️⃣ Save orderId
     appointment.orderId = order.id;
-    console.log('Saving appointment with orderId:', order.id);
     await appointment.save();
-    console.log('Final appointment saved');
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
       key: process.env.RAZORPAY_KEY_ID,
     });
+
   } catch (error) {
-    console.log('Error in createAppointmentPaymentOrder:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Appointment Payment Order Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 // Verify Appointment Payment
-export const verifyAppointmentPayment = async (req, res) => {
+const verifyAppointmentPayment = async (req, res) => {
   try {
     const { appointmentId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
 
@@ -208,6 +353,17 @@ export const verifyAppointmentPayment = async (req, res) => {
     appointment.paymentStatus = 'completed';
     appointment.paymentMethod = 'online';
     appointment.paymentId = razorpay_payment_id;
+
+    // Set plan start and expiry dates for each plan
+    const startDate = new Date();
+    for (const planItem of appointment.plans) {
+      const plan = await Plan.findById(planItem.planId);
+      if (plan) {
+        planItem.startDate = startDate;
+        planItem.expiryDate = calculatePlanExpiry(startDate, plan.durationTime);
+      }
+    }
+
     await appointment.save();
 
     res.status(200).json({ success: true, message: 'Payment verified successfully' });
@@ -217,7 +373,7 @@ export const verifyAppointmentPayment = async (req, res) => {
 };
 
 // Update Appointment Payment Method (for at_clinic or emi)
-export const updateAppointmentPaymentMethod = async (req, res) => {
+const updateAppointmentPaymentMethod = async (req, res) => {
   try {
     const { appointmentId, paymentMethod } = req.body;
 
@@ -238,4 +394,15 @@ export const updateAppointmentPaymentMethod = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+
+export {
+  createPaymentOrder,
+  verifyPayment,
+  updatePaymentMethod,
+
+  createAppointmentPaymentOrder,
+  verifyAppointmentPayment,
+  updateAppointmentPaymentMethod,
 };

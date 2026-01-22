@@ -7,16 +7,22 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import connectDB from "./config/db.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { seedAdmin } from "./controller/authController.js";
 
 // Routes
 import consultationRoutes from "./routes/consultationRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import planRoutes from "./routes/planRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
 // Connect Database
 connectDB();
+
+// Seed admin user
+seedAdmin();
 
 const app = express();
 
@@ -26,7 +32,8 @@ const app = express();
 const allowedOrigins = [
   "https://www.moderndoctor.in",
   "https://moderndoctor.in",
-  "moderndoctor.in"
+  "moderndoctor.in",
+  "http://localhost:3000"
 ];
 
 app.use(
@@ -83,6 +90,8 @@ app.get("/", (req, res) => {
 app.use("/api/bookingconsultancy", consultationRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api", planRoutes);
+app.use("/api/auth", authRoutes);
 
 // 404 Handler
 app.use((req, res) => {

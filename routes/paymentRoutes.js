@@ -5,7 +5,7 @@ import {
   updatePaymentMethod,
   createAppointmentPaymentOrder,
   verifyAppointmentPayment,
-  updateAppointmentPaymentMethod
+  updateAppointmentPaymentMethod,
 } from "../controller/paymentController.js";
 
 const router = express.Router();
@@ -19,5 +19,7 @@ router.post("/update-method", updatePaymentMethod);
 router.post("/appointment/create-order", createAppointmentPaymentOrder);
 router.post("/appointment/verify", verifyAppointmentPayment);
 router.post("/appointment/update-method", updateAppointmentPaymentMethod);
+
+
 
 export default router;
