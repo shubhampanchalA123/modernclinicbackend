@@ -24,6 +24,9 @@ connectDB();
 // Seed admin user
 seedAdmin();
 
+// Start scheduler for expiry reminders
+import './utils/scheduler.js';
+
 const app = express();
 
 /* =======================

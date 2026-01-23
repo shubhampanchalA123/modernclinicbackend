@@ -4,9 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 // Register Booking
 export const registerBooking = async (req, res) => {
   try {
-    const { name, mobile, age, gender, healthIssue, region } = req.body;
+    const { name, email, mobile, age, gender, healthIssue, region } = req.body;
 
-    if (!name || !mobile || !age || !gender || !healthIssue || !region) {
+    if (!name || !email || !mobile || !age || !gender || !healthIssue || !region) {
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
@@ -15,6 +15,7 @@ export const registerBooking = async (req, res) => {
 
     const newBooking = new UserBooking({
       name,
+      email,
       mobile,
       age,
       gender,

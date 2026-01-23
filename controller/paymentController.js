@@ -4,6 +4,7 @@ import UserBooking from '../model/userBookingModel.js';
 import Appointment from '../model/appointmentModel.js';
 import { getPlanAmount } from './planController.js';
 import Plan from "../model/Plan.js";
+import { sendPaymentSuccessEmail } from '../utils/emailService.js';
 
 // Utility function to calculate plan expiry date
 const calculatePlanExpiry = (startDate, durationTime) => {
@@ -186,6 +187,10 @@ const verifyPayment = async (req, res) => {
 
     await booking.save();
 
+    // Send payment success email
+    const currency = booking.userType === 'india' ? 'INR' : 'USD';
+    await sendPaymentSuccessEmail(booking.email, booking.name, booking.plans, booking.amount, currency);
+
     res.status(200).json({ success: true, message: 'Payment verified successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -365,6 +370,10 @@ const verifyAppointmentPayment = async (req, res) => {
     }
 
     await appointment.save();
+
+    // Send payment success email
+    const currency = appointment.userType === 'india' ? 'INR' : 'USD';
+    await sendPaymentSuccessEmail(appointment.email, appointment.name, appointment.plans, appointment.amount, currency);
 
     res.status(200).json({ success: true, message: 'Payment verified successfully' });
   } catch (error) {
