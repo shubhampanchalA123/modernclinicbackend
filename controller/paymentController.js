@@ -4,6 +4,7 @@ import UserBooking from '../model/userBookingModel.js';
 import Appointment from '../model/appointmentModel.js';
 import { getPlanAmount } from './planController.js';
 import Plan from "../model/Plan.js";
+import Coupon from '../model/Coupon.js';
 import { sendPaymentSuccessEmail } from '../utils/emailService.js';
 
 // Utility function to calculate plan expiry date
@@ -38,7 +39,7 @@ const razorpay = new Razorpay({
 // Create Payment Order
 const createPaymentOrder = async (req, res) => {
   try {
-    const { consultantId, selectedPlans, userType } = req.body;
+    const { consultantId, selectedPlans, userType, couponCode } = req.body;
 
     // 1️⃣ Basic validation
     if (
@@ -110,15 +111,72 @@ const createPaymentOrder = async (req, res) => {
       });
     }
 
-    // 5️⃣ Save booking data
+    // 5️⃣ Apply coupon discount if provided
+    let discount = 0;
+    let appliedCoupon = null;
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true
+      });
+
+      if (!coupon) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid coupon code'
+        });
+      }
+
+      // Check expiry
+      if (coupon.expiryDate < new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon has expired'
+        });
+      }
+
+      // Check usage limit
+      if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon usage limit exceeded'
+        });
+      }
+
+      // Calculate discount
+      if (coupon.discountType === 'percentage') {
+        discount = Math.round((totalAmount * coupon.discountValue) / 100);
+      } else {
+        discount = Math.min(coupon.discountValue, totalAmount);
+      }
+
+      appliedCoupon = coupon;
+    }
+
+    const finalAmount = totalAmount - discount;
+
+    // 6️⃣ Save booking data
     booking.plans = plansData;
     booking.userType = userType;
-    booking.amount = totalAmount;
+    booking.originalAmount = totalAmount;
+    booking.amount = finalAmount;
+    booking.couponApplied = appliedCoupon ? {
+      code: appliedCoupon.code,
+      discount,
+      discountType: appliedCoupon.discountType,
+      discountValue: appliedCoupon.discountValue
+    } : null;
     await booking.save();
 
-    // 6️⃣ Create Razorpay order ✅ FIXED
+    // 7️⃣ Increment coupon usage count
+    if (appliedCoupon) {
+      appliedCoupon.usedCount += 1;
+      await appliedCoupon.save();
+    }
+
+    // 8️⃣ Create Razorpay order ✅ FIXED
     const order = await razorpay.orders.create({
-      amount: totalAmount * 100, // ✅ FIX HERE
+      amount: finalAmount * 100, // ✅ FIX HERE
       currency: userType === "india" ? "INR" : "USD",
       receipt: booking._id.toString(),
     });
@@ -224,7 +282,7 @@ const updatePaymentMethod = async (req, res) => {
 // Create Appointment Payment Order
 const createAppointmentPaymentOrder = async (req, res) => {
   try {
-    const { appointmentId, selectedPlans, userType } = req.body;
+    const { appointmentId, selectedPlans, userType, couponCode } = req.body;
 
     // 1️⃣ Basic validation
     if (
@@ -296,15 +354,72 @@ const createAppointmentPaymentOrder = async (req, res) => {
       });
     }
 
-    // 5️⃣ Save appointment data
+    // 5️⃣ Apply coupon discount if provided
+    let discount = 0;
+    let appliedCoupon = null;
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true
+      });
+
+      if (!coupon) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid coupon code'
+        });
+      }
+
+      // Check expiry
+      if (coupon.expiryDate < new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon has expired'
+        });
+      }
+
+      // Check usage limit
+      if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon usage limit exceeded'
+        });
+      }
+
+      // Calculate discount
+      if (coupon.discountType === 'percentage') {
+        discount = Math.round((totalAmount * coupon.discountValue) / 100);
+      } else {
+        discount = Math.min(coupon.discountValue, totalAmount);
+      }
+
+      appliedCoupon = coupon;
+    }
+
+    const finalAmount = totalAmount - discount;
+
+    // 6️⃣ Save appointment data
     appointment.plans = plansData;
     appointment.userType = userType;
-    appointment.amount = totalAmount;
+    appointment.originalAmount = totalAmount;
+    appointment.amount = finalAmount;
+    appointment.couponApplied = appliedCoupon ? {
+      code: appliedCoupon.code,
+      discount,
+      discountType: appliedCoupon.discountType,
+      discountValue: appliedCoupon.discountValue
+    } : null;
     await appointment.save();
 
-    // 6️⃣ Create Razorpay order
+    // 7️⃣ Increment coupon usage count
+    if (appliedCoupon) {
+      appliedCoupon.usedCount += 1;
+      await appliedCoupon.save();
+    }
+
+    // 8️⃣ Create Razorpay order
     const order = await razorpay.orders.create({
-      amount: totalAmount * 100, // amount in paisa/cents
+      amount: finalAmount * 100, // amount in paisa/cents
       currency: userType === "india" ? "INR" : "USD",
       receipt: appointmentId,
     });

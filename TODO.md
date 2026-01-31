@@ -1,7 +1,9 @@
-# TODO: Improve Appointment Payment Functions
+# S3 Integration for Image Upload
 
 ## Tasks
-- [x] Update appointmentModel.js to include 'plans' field similar to userBookingModel
-- [x] Modify createAppointmentPaymentOrder in paymentController.js to handle selectedPlans, calculate amount based on userType, and save plans data
-- [x] Modify verifyAppointmentPayment in paymentController.js to set start and expiry dates for plans upon successful verification
-- [x] Test the updated functions to ensure they work correctly without breaking existing code
+- [x] Install dependencies: multer-s3 and aws-sdk
+- [x] Update utils/multerConfig.js to use S3 storage instead of disk storage
+- [x] Update controller/consultationController.js to save S3 URL instead of local path
+- [x] Add environment variables for AWS credentials (AWS_REGION, S3_BUCKET_NAME) - IAM role use karega
+- [ ] Test image upload to S3 (local me nahi chalega, AWS par deploy kar ke test karna padega)
+- [ ] Verify S3 permissions and bucket access (AWS par deploy kar ke)

@@ -20,6 +20,13 @@ const appointmentSchema = new mongoose.Schema({
   }],
   userType: { type: String, enum: ["india", "foreign"] },
   amount: { type: Number },
+  originalAmount: { type: Number }, // Amount before discount
+  couponApplied: {
+    code: { type: String },
+    discount: { type: Number },
+    discountType: { type: String },
+    discountValue: { type: Number }
+  },
   orderId: { type: String },
   paymentStatus: { type: String, default: 'pending' },
   paymentMethod: { type: String },
