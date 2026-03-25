@@ -6,6 +6,7 @@ import {
   createAppointmentPaymentOrder,
   verifyAppointmentPayment,
   updateAppointmentPaymentMethod,
+  handleCashfreeWebhook,
 } from "../controller/paymentController.js";
 
 const router = express.Router();
@@ -14,6 +15,7 @@ const router = express.Router();
 router.post("/create-order", createPaymentOrder);
 router.post("/verify", verifyPayment);
 router.post("/update-method", updatePaymentMethod);
+router.post("/cashfree/webhook", handleCashfreeWebhook);
 
 // Appointment Payment Routes
 router.post("/appointment/create-order", createAppointmentPaymentOrder);
