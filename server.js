@@ -61,8 +61,8 @@ app.use(
 /* ======================= */
 
 // Body parsers
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Serve static files
 app.use(express.static("public"));
