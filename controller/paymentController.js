@@ -4,7 +4,7 @@ import UserBooking from '../model/userBookingModel.js';
 import Appointment from '../model/appointmentModel.js';
 import Plan from '../model/Plan.js';
 import Coupon from '../model/Coupon.js';
-import { sendPaymentSuccessEmail } from '../utils/emailService.js';
+import { sendAdminEventEmail, sendPaymentSuccessEmail } from '../utils/emailService.js';
 
 const CASHFREE_API_VERSION = process.env.CASHFREE_API_VERSION || '2023-08-01';
 const CASHFREE_BASE_URL = (process.env.CASHFREE_BASE_URL || 'https://sandbox.cashfree.com/pg').replace(/\/+$/, '');
@@ -121,6 +121,21 @@ const finalizeSuccessfulPayment = async ({ entity, paymentId }) => {
 
   const currency = entity.userType === 'india' ? 'INR' : 'USD';
   await sendPaymentSuccessEmail(entity.email, entity.name, entity.plans, entity.amount, currency);
+  await sendAdminEventEmail({
+    eventType: 'payment_success',
+    payload: {
+      name: entity.name,
+      email: entity.email,
+      phone: entity.phone || entity.mobile,
+      source: entity.appointmentId ? 'appointment' : 'consultant',
+      referenceId: entity.appointmentId || entity.consultantId || entity._id?.toString(),
+      paymentStatus: entity.paymentStatus,
+      paymentMethod: entity.paymentMethod,
+      amount: entity.amount,
+      currency,
+      createdAt: entity.createdAt,
+    },
+  });
 };
 
 const verifyCashfreeWebhookSignature = (req) => {

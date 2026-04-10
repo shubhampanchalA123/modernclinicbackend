@@ -61,20 +61,22 @@ export const adminLogin = async (req, res) => {
 // Seed admin user (call this once to create default admin)
 export const seedAdmin = async () => {
   try {
-    // Delete existing admin to recreate with correct password
-    await Admin.deleteMany({ email: 'modernclinic@hmail.com' });
+    // Delete existing default admins to recreate with correct credentials
+    await Admin.deleteMany({
+      email: { $in: ['modernclinic@hmail.com', 'modernhomeo@gmail.com'] }
+    });
 
     // Hash password manually
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash('modern@123', salt);
 
     const admin = new Admin({
-      email: 'modernclinic@hmail.com',
+      email: 'modernhomeo@gmail.com',
       password: hashedPassword
     });
 
     await admin.save();
-    console.log('Default admin created: modernclinic@hmail.com');
+    console.log('Default admin created: modernhomeo@gmail.com');
   } catch (error) {
     console.error('Error seeding admin:', error);
   }

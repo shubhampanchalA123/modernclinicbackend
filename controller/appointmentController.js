@@ -1,5 +1,6 @@
 import Appointment from '../model/appointmentModel.js';
 import { v4 as uuidv4 } from 'uuid';
+import { sendAdminEventEmail } from '../utils/emailService.js';
 
 // Register Appointment
 export const registerAppointment = async (req, res) => {
@@ -27,6 +28,17 @@ export const registerAppointment = async (req, res) => {
     });
 
     await newAppointment.save();
+    await sendAdminEventEmail({
+      eventType: 'appointment_created',
+      payload: {
+        name,
+        email,
+        phone,
+        source: 'appointment',
+        referenceId: appointmentId,
+        createdAt: newAppointment.createdAt,
+      },
+    });
 
     res.status(201).json({
       success: true,

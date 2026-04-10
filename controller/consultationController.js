@@ -1,6 +1,7 @@
 import UserBooking from '../model/userBookingModel.js';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadToS3 } from '../utils/uploadToS3.js';
+import { sendAdminEventEmail } from '../utils/emailService.js';
 
 /**
  * ===============================
@@ -33,6 +34,17 @@ export const registerBooking = async (req, res) => {
     });
 
     await newBooking.save();
+    await sendAdminEventEmail({
+      eventType: 'consultant_created',
+      payload: {
+        name,
+        email,
+        mobile,
+        source: 'consultant',
+        referenceId: consultantId,
+        createdAt: newBooking.createdAt,
+      },
+    });
 
     return res.status(201).json({
       success: true,
