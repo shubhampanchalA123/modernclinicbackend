@@ -17,6 +17,8 @@ import planRoutes from "./routes/planRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import blogRoutes from "./routes/blogRoutes.js";
+import adminBlogRoutes from "./routes/adminBlogRoutes.js";
 
 dotenv.config();
 
@@ -100,6 +102,8 @@ app.use("/api", planRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);
+app.use("/api/blogs", blogRoutes);
+app.use("/api/admin/blogs", adminBlogRoutes);
 
 // 404 Handler
 app.use((req, res) => {
